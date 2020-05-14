@@ -66,15 +66,38 @@ def convert_sdk_output_to_data(song):
     '''
     Return correct features
     '''
-    return {'title':song.title, 'artist':song.artist, 'album':song.album,
+    try:
+        return {'id':song._id, 'title':song.title, 'artist':song.artist, 'album':song.album,
             'media':song.media, 'year':song.year, 'lyrics':song.lyrics}
+    except:
+        pass
 
-def collect_lyrics(lyric, auth_code, pages, path_name):
+
+def retreive_extra_metadata(song_id, client_access_token):
+    '''
+    Collect extra metadata from genius API
+    '''
+    try:
+        song = requests.get('https://api.genius.com/songs/{}'.format(song_id),
+             headers={'Authorization': 'Bearer {}'.format(client_access_token)}).json()['response']['song']
+        print(song)
+        return {'release_date':song['release_date'],
+            'song_relationships':song['song_relationships']}
+    except:
+        pass
+
+def collect_lyrics(lyric, auth_code, pages, filename):
     '''
     Execute all
     '''
-    data = json.dumps([convert_sdk_output_to_data(collect_songs(i[0],i[1], prep_sdk(client_access_token)))
-            for i in search_api(convert_lyrics_to_query(lyric), client_access_token, pages)])
+    data = [i for i in [convert_sdk_output_to_data(collect_songs(i[0],i[1], prep_sdk(client_access_token)))
+            for i in search_api(convert_lyrics_to_query(lyric), client_access_token, pages)] if i is not None]
 
-    with open(path_name, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    extra_data = {i['id']:retreive_extra_metadata(i['id'], auth_code) for i in data}
+
+    final_data = [{**v, **extra_data[(data[i]['id'])]} for i,v in enumerate(data)]
+
+    with open('{}.json'.format(filename), 'w', encoding='utf-8') as f:
+        json.dump(final_data, f, ensure_ascii=False, indent=4)
+
+    return final_data
